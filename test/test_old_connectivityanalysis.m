@@ -12,7 +12,7 @@ if is_octave
   % TODO: figure out what the issue is here
   % Note: this seems hard to reproduce on non-Travis system
   reason=sprintf('%s can crash Octave on travis and has been distabled',...
-                  mfilename());
+                    mfilename());
   moxunit_throw_test_skipped_exception(reason)
 end
 
