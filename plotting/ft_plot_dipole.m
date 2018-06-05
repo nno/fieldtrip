@@ -17,6 +17,8 @@ function h = ft_plot_dipole(pos, ori, varargin)
 %
 % Example
 %   ft_plot_dipole([0 0 0], [1 2 3], 'color', 'r', 'alpha', 1)
+%
+% See also FT_PLOT_MESH, FT_PLOT_ORTHO
 
 % Copyright (C) 2009, Robert Oostenveld
 %
@@ -51,7 +53,7 @@ alpha          = ft_getopt(varargin, 'alpha',     1);
 % for backward compatibility, this can be changed into an error at the end of 2016
 units = ft_getopt(varargin, 'units');
 if ~isempty(units)
-  warning('please use "unit" instead of "units"');
+  ft_warning('please use "unit" instead of "units"');
   unit = units;
   clear units
 end
@@ -66,7 +68,7 @@ if isequal(diameter, 'auto')
     case 'mm'
       diameter = 5;
     otherwise
-      error('unsupported unit');
+      ft_error('unsupported unit');
   end
 end
 
@@ -80,7 +82,7 @@ if isequal(length, 'auto')
     case 'mm'
       length = 15;
     otherwise
-      error('unsupported unit');
+      ft_error('unsupported unit');
   end
 end
 

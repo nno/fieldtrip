@@ -2,18 +2,21 @@
 #include "platform.h"
 #include "platform_includes.h"
 
+#ifdef PLATFORM_OSX
 /*
- * work around lack of clock_gettime in os x
- * https://gist.github.com/jbenet/1087739
+ * OS X did not have clock_gettime for a long time, whereas in the most recent
+ * macOS High Sierra and the accompanying XCode with MacOSX10.12.sdk it is available.
+ *
+ * This is a drop-in replacement based on https://gist.github.com/jbenet/1087739
+ * that uses clock_get_time. The first argument to this function is CLOCK_REALTIME,
+ * which gets ignored.
+ *
+ * See also https://github.com/zeromq/libzmq/issues/2175 where this is discussed.
  */
 
-#ifdef PLATFORM_OSX
-
+#ifdef not(__CLOCK_AVAILABILITY)
 #include <mach/clock.h>
 #include <mach/mach.h>
-
-/* OS X does not have clock_gettime, make a drop-in replacement that uses clock_get_time */
-/* the first argument to this function is CLOCK_REALTIME, which gets ignored */
 
 int clock_gettime(int ignore, struct timespec *ts) {
   clock_serv_t cclock;
@@ -25,8 +28,12 @@ int clock_gettime(int ignore, struct timespec *ts) {
   ts->tv_nsec = mts.tv_nsec;
   return 0;
 }
+#endif
 
-#elif defined (COMPILER_MINGW)
+#elif defined (COMPILER_MINGW_ORG)
+/*
+ * Work around lack of clock_gettime in Mingw on windows.
+ */
 
 LARGE_INTEGER
 getFILETIMEoffset()
@@ -48,6 +55,7 @@ getFILETIMEoffset()
     t.QuadPart |= f.dwLowDateTime;
     return (t);
 }
+
 
 int
 clock_gettime(int ignore, struct timeval *tv)

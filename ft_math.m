@@ -123,6 +123,12 @@ if ~iscell(cfg.parameter)
   cfg.parameter = {cfg.parameter};
 end
 
+if ft_datatype(varargin{1}, 'raw+comp')
+    if length(varargin)>1
+        ft_error('ft_math does not support more than one input argument if the input data is of type "raw" or "comp"')
+    end
+end
+
 % this function only works for the upcoming (not yet standard) source representation without sub-structures
 if ft_datatype(varargin{1}, 'source')
   % update the old-style beamformer source reconstruction
@@ -142,7 +148,7 @@ end
 
 for p=1:length(cfg.parameter)
   if ~issubfield(varargin{1}, cfg.parameter{p})
-    error('the requested parameter is not present in the data');
+    ft_error('the requested parameter is not present in the data');
   end
 end
 
@@ -158,44 +164,29 @@ cfg.parameter = tmpcfg.parameter;
 for p = 1:length(cfg.parameter)
   dimordtmp{p} = getdimord(varargin{1}, cfg.parameter{p});
   if p>1 && ~strcmp(dimordtmp{1}, dimordtmp{p})
-    error('the dimord of multiple parameters must be the same');
+    ft_error('the dimord of multiple parameters must be the same');
   end
 end
-dimord = dimordtmp{1}; clear dimordtmp
-dimtok = tokenize(dimord, '_');
+clear dimordtmp
 
-% this determines which descriptive fields will get copied over
-haschan    = any(strcmp(dimtok, 'chan'));
-haschancmb = any(strcmp(dimtok, 'chancmb'));
-hasfreq    = any(strcmp(dimtok, 'freq'));
-hastime    = any(strcmp(dimtok, 'time'));
-haspos     = any(strcmp(dimtok, 'pos'));
-
-% construct the output data structure
-data = [];
-if haschan
-  data.label = varargin{1}.label;
+% construct the output data structure; make sure descriptive fields will get copied over
+% some ugly things need to be done in order to get the correct xxxdimord
+% fields in the output
+fn  = fieldnames(varargin{1});
+dimordfields = fn(~cellfun(@isempty, strfind(fn, 'dimord')))';
+if numel(dimordfields)==1 && strcmp(dimordfields{1},'dimord')
+    % this is OK and counts for most data structures
+else
+    % this is in the case of one or more xxxdimord fields, in which case
+    % only the requested parameters' xxxdimord fields should be returned in
+    % the output
+    ok = false(1,numel(dimordfields));
+    for p = 1:length(cfg.parameter)
+        ok(p) = any(~cellfun(@isempty, strfind(dimordfields, cfg.parameter{p})));
+    end
+    dimordfields = dimordfields(ok);
 end
-if haschancmb
-  data.labelcmb = varargin{1}.labelcmb;
-end
-if hasfreq
-  data.freq = varargin{1}.freq;
-end
-if hastime
-  data.time = varargin{1}.time;
-end
-if haspos
-  if isfield(varargin{1}, 'pos')
-    data.pos = varargin{1}.pos;
-  end
-  if isfield(varargin{1}, 'dim')
-    data.dim = varargin{1}.dim;
-  end
-  if isfield(varargin{1}, 'transform')
-    data.transform = varargin{1}.transform;
-  end
-end
+data = keepfields(varargin{1}, [dimordfields {'label', 'labelcmb', 'freq', 'time', 'pos', 'dim', 'transform'}]);
 
 for p = 1:length(cfg.parameter)
   fprintf('selecting %s from the first input argument\n', cfg.parameter{p});
@@ -209,20 +200,20 @@ for p = 1:length(cfg.parameter)
   m = ft_getopt(cfg, 'matrix');
 
   % check the dimensionality of m against the input data
-  if ~isempty(m),
+  if ~isempty(m)
     for i=1:length(varargin)
       ok = isequal(size(getsubfield(varargin{i}, cfg.parameter{p})),size(m));
       if ~ok, break; end
     end
-    if ~ok,
-      error('the dimensions of cfg.matrix do not allow for element-wise operations');
+    if ~ok
+      ft_error('the dimensions of cfg.matrix do not allow for element-wise operations');
     end
   end
 
   % only one of these can be defined at the moment (i.e. not allowing for
   % operations such as (x1+m)^s for now
-  if ~isempty(m) && ~isempty(s),
-    error('you can either specify a cfg.matrix or a cfg.scalar, not both');
+  if ~isempty(m) && ~isempty(s)
+    ft_error('you can either specify a cfg.matrix or a cfg.scalar, not both');
   end
 
   % touch it to keep track of it in the output cfg
@@ -230,14 +221,14 @@ for p = 1:length(cfg.parameter)
   if ~isempty(m), cfg.matrix; end
 
   % replace s with m, so that the code below is more transparent
-  if ~isempty(m),
+  if ~isempty(m)
     s = m; clear m;
   end
 
   if length(varargin)==1
     switch cfg.operation
       case 'add'
-        if isscalar(s),
+        if isscalar(s)
           fprintf('adding %f to the %s\n', s, cfg.parameter{p});
         else
           fprintf('adding the contents of cfg.matrix to the %s\n', cfg.parameter{p});
@@ -249,7 +240,7 @@ for p = 1:length(cfg.parameter)
         end
 
       case 'subtract'
-        if isscalar(s),
+        if isscalar(s)
           fprintf('subtracting %f from the %s\n', s, cfg.parameter{p});
         else
           fprintf('subtracting the contents of cfg.matrix from the %s\n', cfg.parameter{p});
@@ -261,7 +252,7 @@ for p = 1:length(cfg.parameter)
         end
 
       case 'multiply'
-        if isscalar(s),
+        if isscalar(s)
           fprintf('multiplying %s with %f\n', cfg.parameter{p}, s);
         else
           fprintf('multiplying %s with the content of cfg.matrix\n', cfg.parameter{p});
@@ -274,7 +265,7 @@ for p = 1:length(cfg.parameter)
         end
 
       case 'divide'
-        if isscalar(s),
+        if isscalar(s)
           fprintf('dividing %s by %f\n', cfg.parameter{p}, s);
         else
           fprintf('dividing %s by the content of cfg.matrix\n', cfg.parameter{p});
@@ -368,7 +359,7 @@ for p = 1:length(cfg.parameter)
 
       case 'subtract'
         if length(varargin)>2
-          error('the operation "%s" requires exactly 2 input arguments', cfg.operation);
+          ft_error('the operation "%s" requires exactly 2 input arguments', cfg.operation);
         end
         fprintf('subtracting the 2nd input argument from the 1st\n');
         if iscell(x1)
@@ -379,7 +370,7 @@ for p = 1:length(cfg.parameter)
 
       case 'divide'
         if length(varargin)>2
-          error('the operation "%s" requires exactly 2 input arguments', cfg.operation);
+          ft_error('the operation "%s" requires exactly 2 input arguments', cfg.operation);
         end
         fprintf('dividing the 1st input argument by the 2nd\n');
         if iscell(x1)
@@ -390,7 +381,7 @@ for p = 1:length(cfg.parameter)
 
       case 'log10'
         if length(varargin)>2
-          error('the operation "%s" requires exactly 2 input arguments', cfg.operation);
+          ft_error('the operation "%s" requires exactly 2 input arguments', cfg.operation);
         end
         fprintf('taking the log difference between the 2nd input argument and the 1st\n');
         y = log10(x1 ./ varargin{2}.(cfg.parameter{p}));
@@ -444,13 +435,12 @@ for p = 1:length(cfg.parameter)
   % store the result of the operation in the output structure
   data = setsubfield(data, cfg.parameter{p}, y);
 end % p over length(cfg.parameter)
-data.dimord = dimord;
 
 % certain fields should remain in the output, but only if they are identical in all inputs
-keepfield = {'grad', 'elec', 'inside', 'trialinfo', 'sampleinfo', 'tri'};
+keepfield = {'grad', 'elec', 'opto', 'inside', 'trialinfo', 'sampleinfo', 'tri'};
 for j=1:numel(keepfield)
   if isfield(varargin{1}, keepfield{j})
-    tmp  = varargin{i}.(keepfield{j});
+    tmp  = varargin{1}.(keepfield{j});
     keep = true;
   else
     keep = false;

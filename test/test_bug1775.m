@@ -3,13 +3,7 @@ function test_bug1775
 % MEM 2gb
 % WALLTIME 00:10:00
 
-% TEST test_bug1775
 % TEST ft_sourceparcellate ft_checkdata ft_datatype_source ft_datatype_volume ft_datatype_parcellation ft_datatype_segmentation
-
-% use FieldTrip defaults instead of personal defaults
-global ft_default;
-ft_default = [];
-ft_default.feedback = 'no';
 
 %% create a set of sensors
 [pnt, tri] = icosahedron162;
@@ -24,7 +18,7 @@ for i=1:length(sel)
   grad.label{i} = sprintf('magnetometer%d', i);
 end
 grad.unit = 'cm';
-grad.type = 'magnetometer';
+grad.type = 'meg';
 
 grad = ft_datatype_sens(grad);
 
@@ -42,7 +36,7 @@ vol = ft_datatype_headmodel(vol);
 cfg = [];
 cfg.grad            = grad;
 cfg.vol             = vol;
-cfg.grid.resolution = 1;
+cfg.grid.resolution = 2; % cm
 cfg.channel         = 'all';
 grid = ft_prepare_leadfield(cfg);
 
@@ -103,6 +97,7 @@ source1p = ft_sourceparcellate(cfg, source1, parcellation);
 source2p = ft_sourceparcellate(cfg, source2, parcellation);
 
 %% construct a more complex source structure
+% note that this increases memory requirements
 source3 = [];
 source3.pos       = source2.pos;
 source3.freq      = 1:5;
@@ -113,6 +108,7 @@ cfg = [];
 source3p = ft_sourceparcellate(cfg, source3, parcellation);
 
 %%
+% this increases memory requirements even more
 source4 = [];
 source4.pos       = source2.pos;
 source4.freq      = 1:5;

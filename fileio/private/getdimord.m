@@ -7,12 +7,16 @@ function dimord = getdimord(data, field, varargin)
 %
 % See also GETDIMSIZ, GETDATFIELD
 
+% Please note that this function is called from many other FT functions. To avoid
+% unwanted recursion, you should avoid (where possible) calling other FT functions
+% inside this one.
+
 if ~isfield(data, field) && isfield(data, 'avg') && isfield(data.avg, field)
   field = ['avg.' field];
 elseif ~isfield(data, field) && isfield(data, 'trial') && isfield(data.trial, field)
   field = ['trial.' field];
 elseif ~isfield(data, field)
-  error('field "%s" not present in data', field);
+  ft_error('field "%s" not present in data', field);
 end
 
 if strncmp(field, 'avg.', 4)
@@ -90,11 +94,13 @@ if isfield(data, 'freq')
   nfreq = length(data.freq);
 end
 
-if isfield(data, 'trial') && ft_datatype(data, 'raw')
+if isfield(data, 'trial') && iscell(data.trial)
+  % raw data
   nrpt = length(data.trial);
 end
 
-if isfield(data, 'trialtime') && ft_datatype(data, 'spike')
+if isfield(data, 'trialtime') && isfield(data, 'timestamp') && isfield(data, 'label')
+  % spike data
   nrpt = size(data.trialtime,1);
 end
 
@@ -108,7 +114,7 @@ if isfield(data, 'cumtapcnt')
     % this happens after  mtmconvol with keeptrials
     nrpttap = sum(data.cumtapcnt,2);
     if any(nrpttap~=nrpttap(1))
-      warning('unexpected variation of the number of tapers over trials')
+      ft_warning('unexpected variation of the number of tapers over trials')
       nrpttap = nan;
     else
       nrpttap = nrpttap(1);
@@ -156,7 +162,8 @@ if isfield(data, 'timestamp') && iscell(data.timestamp)
   nspike = length(data.timestamp{1}); % spike data: only for the first channel
 end
 
-if ft_datatype(data, 'mvar') && isfield(data, 'coeffs')
+if isfield(data, 'dimord') && ~isempty(strfind(data.dimord, 'lag')) && isfield(data, 'coeffs')
+  % mvar data
   nlag = size(data.coeffs,3);
 end
 
@@ -316,7 +323,8 @@ switch field
     if isequal(datsiz, [npos nfreq ntime])
       dimord = 'pos_freq_time';
     end
-  case {'pow' 'noise'}
+    
+  case {'pow' 'noise' 'rv'}
     if isequal(datsiz, [npos ntime])
       dimord = 'pos_time';
     elseif isequal(datsiz, [npos nfreq])
@@ -341,7 +349,7 @@ switch field
       dimord = 'rpt_pos_freq';
     end
     
-  case {'mom','itc','aa','stat','pval','statitc','pitc'}
+  case {'mom' 'itc' 'aa' 'stat','pval' 'statitc' 'pitc'}
     if isequal(datsiz, [npos nori nrpt])
       dimord = 'pos_ori_rpt';
     elseif isequal(datsiz, [npos nori ntime])
@@ -437,18 +445,25 @@ switch field
       dimord = 'chan_topochan';
     end
     
-  case {'inside'}
-    if isequalwithoutnans(datsiz, [npos])
+  case {'anatomy' 'inside'}
+    if isfield(data, 'dim') && isequal(datsiz, data.dim)
+      dimord = 'dim1_dim2_dim3';
+    elseif isequalwithoutnans(datsiz, [npos 1]) || isequalwithoutnans(datsiz, [1 npos])
       dimord = 'pos';
     end
     
-  case {'timestamp' 'time'}
-    if ft_datatype(data, 'spike') && iscell(data.(field)) && datsiz(1)==nchan
+  case {'timestamp'}
+    if iscell(data.(field)) && isfield(data, 'label') && datsiz(1)==nchan
       dimord = '{chan}_spike';
-    elseif ft_datatype(data, 'raw') && iscell(data.(field)) && datsiz(1)==nrpt
+    end
+    
+  case {'time'}
+    if iscell(data.(field)) && isfield(data, 'label') && datsiz(1)==nrpt
       dimord = '{rpt}_time';
     elseif isvector(data.(field)) && isequal(datsiz, [1 ntime ones(1,numel(datsiz)-2)])
       dimord = 'time';
+    elseif iscell(data.(field)) && isfield(data, 'label') && isfield(data, 'timestamp') && isequal(getdimsiz(data, 'timestamp'), datsiz) && datsiz(1)==nchan
+      dimord = '{chan}_spike';
     end
     
   case {'freq'}
@@ -603,7 +618,9 @@ function warning_dimord_could_not_be_determined(field,data)
     end
   end
 
-  warning('%s\n\n%s', msg,content);
+  id = 'FieldTrip:getdimord:warning_dimord_could_not_be_determined';
+  msg = sprintf('%s\n\n%s', msg, content);
+  ft_warning(id, msg);
 end % function warning_dimord_could_not_be_determined
 
 
@@ -641,11 +658,11 @@ for k = 1:numel(dimtok)
     case 'chan'
       ok = numel(data.label)==1;
     otherwise
-      if isfield(data, dimtok{k}); % check whether field exists
+      if isfield(data, dimtok{k}) % check whether field exists
         ok = numel(data.(dimtok{k}))==1;
-      end;
+      end
   end
-  if ok,
+  if ok
     break;
   end
 end
